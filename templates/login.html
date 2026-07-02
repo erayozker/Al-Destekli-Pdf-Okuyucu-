@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Giriş - StudyMate PDF AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="login-shell">
+      <section class="card login-card">
+        <a class="brand light-brand" href="{{ url_for('main.index') }}">
+          <span class="brand-mark">S</span>
+          <strong>StudyMate <b>PDF AI</b></strong>
+        </a>
+        <h1>Giriş yap</h1>
+        <p>Belgelerinize ve analiz geçmişinize erişmek için oturum açın.</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <section class="flash-list" aria-live="polite">
+              {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+              {% endfor %}
+            </section>
+          {% endif %}
+        {% endwith %}
+
+        <form class="stack-form" action="{{ url_for('main.login_post', next=request.args.get('next', '')) }}" method="post">
+          <label>
+            Kullanıcı adı
+            <input name="username" autocomplete="username" required>
+          </label>
+          <label>
+            Parola
+            <input name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <button type="submit">Giriş yap</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

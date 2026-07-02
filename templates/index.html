@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StudyMate PDF AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="{{ url_for('main.index') }}">
+          <span class="brand-mark">S</span>
+          <strong>StudyMate <b>PDF AI</b></strong>
+        </a>
+
+        <nav class="side-nav" aria-label="Ana menü">
+          <a class="active" href="{{ url_for('main.index', doc=document_id if document else '') }}"><span>⌂</span>Ana Sayfa</a>
+          <a href="#documents"><span>□</span>Belgeler</a>
+          <a href="#summary"><span>≡</span>Özetler</a>
+          <a href="#study"><span>✓</span>Çalışma</a>
+          <a href="#questions"><span>?</span>Soru Üret</a>
+          <a href="#memory"><span>◎</span>Hafıza</a>
+          <a href="#history"><span>◴</span>Geçmiş</a>
+          <a href="#settings"><span>⚙</span>Ayarlar</a>
+        </nav>
+
+        <section class="plan-card">
+          <div>
+            <strong>Güvenli Çalışma Alanı</strong>
+            <span>Belgeler kullanıcı oturumuna göre ayrılır.</span>
+          </div>
+          <div class="usage">
+            <span>Depolama</span>
+            <strong>Yerel</strong>
+          </div>
+          <div class="usage-bar"><span></span></div>
+        </section>
+
+        <section class="profile-card">
+          <span class="avatar">{{ current_user[:1]|upper if current_user else 'S' }}</span>
+          <div>
+            <strong>{{ current_user if auth_required else 'Yerel oturum' }}</strong>
+            <span>{{ 'Korumalı erişim' if auth_required else 'Geliştirme modu' }}</span>
+          </div>
+        </section>
+      </aside>
+
+      <section class="content-shell">
+        <header class="topbar">
+          <div>
+            <h1>PDF çalışma alanı</h1>
+            <p>Yapay zeka destekli PDF okuma ve özetleme asistanın.</p>
+          </div>
+          <div class="top-actions">
+            <a href="#settings">Güvenlik</a>
+            {% if auth_required %}
+              <form action="{{ url_for('main.logout') }}" method="post">
+                <button type="submit">Çıkış</button>
+              </form>
+            {% endif %}
+            <span class="bell">•</span>
+          </div>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <section class="flash-list" aria-live="polite">
+              {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+              {% endfor %}
+            </section>
+          {% endif %}
+        {% endwith %}
+
+        <div class="dashboard-grid">
+          <section class="main-column">
+            <article class="card upload-card" id="documents">
+              <h2>PDF Yükle</h2>
+              <form action="{{ url_for('main.upload') }}" method="post" enctype="multipart/form-data">
+                <div class="drop-zone">
+                  <div class="upload-icon">↑</div>
+                  <strong>PDF dosyanızı buraya sürükleyin ve bırakın</strong>
+                  <span>veya cihazınızdan seçin</span>
+                  <label class="primary-button" for="pdf">Dosya Seç</label>
+                  <input id="pdf" name="pdf" type="file" accept="application/pdf" required onchange="this.form.submit()">
+
+                  <div class="file-pill">
+                    <span class="pdf-icon">PDF</span>
+                    <div>
+                      <strong>{{ document.filename if document else 'Henüz PDF seçilmedi' }}</strong>
+                      <span>
+                        {% if document %}
+                          {{ document.size_label }} · {{ document.page_count }} sayfa
+                        {% else %}
+                          PDF yükleyerek analize başlayın
+                        {% endif %}
+                      </span>
+                    </div>
+                    {% if document %}<span class="ok-dot">✓</span>{% endif %}
+                  </div>
+                </div>
+              </form>
+            </article>
+
+            <section class="stat-grid">
+              <article class="stat-card">
+                <span>▣</span>
+                <div><strong>{{ document.page_count if document else 0 }}</strong><small>sayfa</small><p>Sayfa Sayısı</p></div>
+              </article>
+              <article class="stat-card">
+                <span>Aa</span>
+                <div><strong>{{ document.word_count if document else 0 }}</strong><small>kelime</small><p>Kelime Sayısı</p></div>
+              </article>
+              <article class="stat-card">
+                <span>◷</span>
+                <div><strong>{{ ((document.word_count / 220)|round|int) if document else 0 }}</strong><small>dk</small><p>Okuma Süresi</p></div>
+              </article>
+              <article class="stat-card">
+                <span>◆</span>
+                <div><strong>{{ key_terms|length if document else 0 }}</strong><small>adet</small><p>Anahtar Kelime</p></div>
+              </article>
+            </section>
+
+            {% if document %}
+              <section class="insight-grid">
+                <article class="card summary-card" id="summary">
+                  <div class="card-head">
+                    <h2>Yapay Zekâ Özeti</h2>
+                    <form action="{{ url_for('main.index') }}" method="get">
+                      <input type="hidden" name="doc" value="{{ document_id }}">
+                      <select name="ai_style">
+                        {% for value, label in ai_summary_labels.items() %}
+                          <option value="{{ value }}" {% if ai_style == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                      </select>
+                      <button type="submit">Oluştur</button>
+                    </form>
+                  </div>
+                  {% if ai_error %}
+                    <p>{{ ai_error }}</p>
+                  {% elif ai_result %}
+                    <p>{{ ai_result }}</p>
+                  {% else %}
+                    <p>{{ summary }}</p>
+                  {% endif %}
+                  <div class="inline-actions">
+                    <a href="{{ url_for('main.download', document_id=document_id, kind='text') }}">Tam Metni Görüntüle</a>
+                    <a href="{{ url_for('main.download', document_id=document_id, kind='summary', summary=summary_length) }}">Özeti İndir</a>
+                    <a href="{{ url_for('main.download', document_id=document_id, kind='notes') }}">Notlar</a>
+                  </div>
+                </article>
+
+                <article class="card keyword-card">
+                  <h2>Anahtar Kavramlar</h2>
+                  <div class="tags">
+                    {% for term in key_terms %}
+                      <span>{{ term }}</span>
+                    {% else %}
+                      <span>Bulunamadı</span>
+                    {% endfor %}
+                  </div>
+                </article>
+              </section>
+
+              <article class="card questions-card" id="questions">
+                <div class="card-head">
+                  <h2>Oluşturulan Sorular</h2>
+                  <a href="#chat">Tümünü Gör</a>
+                </div>
+                <ol>
+                  {% for item in suggested_questions %}
+                    <li>
+                      <a href="{{ url_for('main.index', doc=document_id, question=item) }}">{{ item }}</a>
+                    </li>
+                  {% endfor %}
+                </ol>
+              </article>
+
+              <article class="card study-card" id="study">
+                <div class="card-head">
+                  <div>
+                    <h2>Akıllı Çalışma Modu</h2>
+                    <p>{{ study_mode.estimated_minutes }} dakikalık kişisel tekrar paketi</p>
+                  </div>
+                  <a href="#study-quiz">Quiz'e geç</a>
+                </div>
+
+                <div class="study-focus">
+                  <strong>Bugünün odak kavramları</strong>
+                  <div class="tags">
+                    {% for term in study_mode.focus_terms %}
+                      <span>{{ term }}</span>
+                    {% else %}
+                      <span>Kavram bulunamadı</span>
+                    {% endfor %}
+                  </div>
+                </div>
+
+                <div class="study-grid">
+                  <section class="study-panel">
+                    <h3>Bugün tekrar et</h3>
+                    <ol class="review-list">
+                      {% for item in study_mode.review_plan %}
+                        <li>
+                          <strong>{{ item.title }}</strong>
+                          <span>{{ item.duration }}</span>
+                          <p>{{ item.detail }}</p>
+                        </li>
+                      {% endfor %}
+                    </ol>
+                  </section>
+
+                  <section class="study-panel" id="study-quiz">
+                    <h3>Mini quiz</h3>
+                    <div class="quiz-list">
+                      {% for item in study_mode.quiz %}
+                        <details>
+                          <summary>{{ item.question }}</summary>
+                          <p>{{ item.prompt }}</p>
+                          <div class="choice-list">
+                            {% for option in item.options %}
+                              <span>{{ option }}</span>
+                            {% endfor %}
+                          </div>
+                          <small>Cevap: {{ item.answer }} · Sayfa {{ item.page }}</small>
+                        </details>
+                      {% else %}
+                        <p>Quiz üretmek için yeterli metin bulunamadı.</p>
+                      {% endfor %}
+                    </div>
+                  </section>
+
+                  <section class="study-panel">
+                    <h3>Flashcard</h3>
+                    <div class="flashcard-list">
+                      {% for card in study_mode.flashcards %}
+                        <details class="flashcard">
+                          <summary>{{ card.front }}</summary>
+                          <p>{{ card.back }}</p>
+                          <small>Sayfa {{ card.page }}</small>
+                        </details>
+                      {% else %}
+                        <p>Flashcard üretmek için yeterli kavram bulunamadı.</p>
+                      {% endfor %}
+                    </div>
+                  </section>
+
+                  <section class="study-panel">
+                    <h3>Boşluk doldurma</h3>
+                    <div class="cloze-list">
+                      {% for card in study_mode.cloze %}
+                        <details>
+                          <summary>{{ card.text }}</summary>
+                          <small>Cevap: {{ card.answer }} · Sayfa {{ card.page }}</small>
+                        </details>
+                      {% else %}
+                        <p>Boşluk doldurma kartı üretmek için yeterli cümle bulunamadı.</p>
+                      {% endfor %}
+                    </div>
+                  </section>
+                </div>
+              </article>
+
+              <details class="card tools-card">
+                <summary>Gelişmiş araçları göster</summary>
+                <div class="tool-grid">
+                  <form class="stack-form" action="{{ url_for('main.index') }}" method="get">
+                    <h3>Gelişmiş arama</h3>
+                    <input type="hidden" name="doc" value="{{ document_id }}">
+                    <input name="q" type="search" value="{{ query }}" placeholder="Kelime veya ifade">
+                    <select name="search_mode">
+                      <option value="exact" {% if search_mode == 'exact' %}selected{% endif %}>Tam ifade</option>
+                      <option value="any" {% if search_mode == 'any' %}selected{% endif %}>Herhangi kelime</option>
+                      <option value="all" {% if search_mode == 'all' %}selected{% endif %}>Tüm kelimeler</option>
+                    </select>
+                    <button type="submit">Ara</button>
+                  </form>
+
+                  <form class="stack-form" action="{{ url_for('main.index') }}" method="get">
+                    <h3>Semantik arama</h3>
+                    <input type="hidden" name="doc" value="{{ document_id }}">
+                    <input name="semantic_q" type="search" value="{{ semantic_query }}" placeholder="Anlamca yakın bölümler">
+                    <button type="submit">Semantik ara</button>
+                  </form>
+
+                  <form class="stack-form" action="{{ url_for('main.add_note', document_id=document_id) }}" method="post">
+                    <h3>Sayfa notu</h3>
+                    <input type="hidden" name="page" value="{{ page }}">
+                    <textarea name="content" placeholder="Bu sayfa için not yazın"></textarea>
+                    <button type="submit">Notu kaydet</button>
+                  </form>
+                </div>
+
+                {% if search_results or semantic_results %}
+                  <div class="result-list">
+                    {% for result in search_results %}
+                      <a href="{{ url_for('main.index', doc=document_id, page=result.page, q=query) }}">
+                        <strong>Sayfa {{ result.page }}</strong>
+                        <span>{{ result.count }} eşleşme</span>
+                        <small>{{ result.snippet|render_highlights }}</small>
+                      </a>
+                    {% endfor %}
+                    {% for item in semantic_results %}
+                      <a href="{{ url_for('main.index', doc=document_id, page=item.page) }}">
+                        <strong>Sayfa {{ item.page }}</strong>
+                        <span>Benzerlik: {{ '%.2f'|format(item.score) }}</span>
+                        <small>{{ item.text[:240] }}{% if item.text|length > 240 %}...{% endif %}</small>
+                      </a>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </details>
+            {% else %}
+              <article class="card empty-card">
+                <h2>Yapay Zekâ Özeti</h2>
+                <p>PDF yüklediğinizde özet, anahtar kavramlar, sorular ve sohbet alanı burada oluşur.</p>
+              </article>
+            {% endif %}
+          </section>
+
+          <aside class="chat-panel" id="chat">
+            <div class="chat-head">
+              <h2>PDF Sohbet</h2>
+              <span>⋮</span>
+            </div>
+            {% if document %}
+              <div class="chat-body">
+                {% if question %}
+                  <div class="bubble user">{{ question }}</div>
+                {% else %}
+                  <div class="bubble user">Bu belge ne anlatıyor?</div>
+                {% endif %}
+                <div class="bubble assistant">
+                  {% if qa_answer %}
+                    {{ qa_answer }}
+                  {% else %}
+                    {{ page_summary }}
+                  {% endif %}
+                </div>
+              </div>
+              {% if evidence_cards %}
+                <section class="evidence-panel">
+                  <div class="evidence-head">
+                    <strong>Kanıt kartları</strong>
+                    <span>{{ evidence_mode }}</span>
+                  </div>
+                  <div class="evidence-list">
+                    {% for card in evidence_cards %}
+                      <a class="evidence-card" href="{{ url_for('main.index', doc=document_id, page=card.page, question=question) }}">
+                        <span class="evidence-page">Sayfa {{ card.page }}</span>
+                        <img src="{{ url_for('main.page_image', document_id=document_id, page_number=card.page, zoom=0.55) }}" alt="Sayfa {{ card.page }} kanıt önizlemesi">
+                        <small>{{ card.snippet|render_highlights }}</small>
+                      </a>
+                    {% endfor %}
+                  </div>
+                </section>
+              {% endif %}
+              <form class="chat-input" action="{{ url_for('main.index') }}" method="get">
+                <input type="hidden" name="doc" value="{{ document_id }}">
+                <input name="question" value="{{ question }}" placeholder="Sorunuzu yazın...">
+                <button type="submit">➤</button>
+              </form>
+              <p class="chat-note">Yanıtlar yapay zekâ tarafından oluşturulur. Doğruluk garanti edilmez.</p>
+            {% else %}
+              <div class="chat-body">
+                <div class="bubble assistant">PDF yüklediğinizde belgeyle sohbet edebilirsiniz.</div>
+              </div>
+            {% endif %}
+          </aside>
+        </div>
+
+        <section class="bottom-panels">
+          <article class="card memory-card" id="memory">
+            <div class="card-head">
+              <h2>Öğrenme Hafızası</h2>
+              <span>{{ learning_memory.question_count }} soru · {{ learning_memory.read_document_count }} belge</span>
+            </div>
+            <div class="memory-grid">
+              <section>
+                <h3>Zorlandığın konular</h3>
+                <div class="tags">
+                  {% for topic in learning_memory.weak_topics %}
+                    <span>{{ topic }}</span>
+                  {% else %}
+                    <span>Henüz sinyal yok</span>
+                  {% endfor %}
+                </div>
+              </section>
+              <section>
+                <h3>Kişisel tekrar planı</h3>
+                <ol class="memory-plan">
+                  {% for item in learning_memory.review_plan %}
+                    <li>
+                      <strong>{{ item.title }}</strong>
+                      <p>{{ item.detail }}</p>
+                    </li>
+                  {% endfor %}
+                </ol>
+              </section>
+            </div>
+            <div class="recent-question-list">
+              {% for item in learning_memory.recent_questions[:3] %}
+                <div>
+                  <strong>{{ item.question }}</strong>
+                  <span>{{ item.filename }} · {{ item.created_at }}</span>
+                </div>
+              {% else %}
+                <p>Belgeyle soru-cevap yaptıkça burada kişisel öğrenme izi oluşur.</p>
+              {% endfor %}
+            </div>
+          </article>
+
+          <article class="card" id="history">
+            <h2>Geçmiş</h2>
+            <div class="history-list">
+              {% for item in history_documents[:6] %}
+                <a href="{{ url_for('main.index', doc=item.id) }}">
+                  <strong>{{ item.filename }}</strong>
+                  <span>{{ item.page_count }} sayfa · {{ item.uploaded_at_label }}</span>
+                </a>
+              {% else %}
+                <p>Henüz geçmiş yok.</p>
+              {% endfor %}
+            </div>
+          </article>
+
+          <article class="card" id="settings">
+            <h2>PDF Karşılaştırma</h2>
+            <form action="{{ url_for('main.compare_upload') }}" method="post" enctype="multipart/form-data" class="compare-form">
+              <input name="left_pdf" type="file" accept="application/pdf" required>
+              <input name="right_pdf" type="file" accept="application/pdf" required>
+              <button type="submit">İki PDF'i karşılaştır</button>
+            </form>
+            {% if compare %}
+              <p><strong>{{ compare.left }}</strong> ↔ <strong>{{ compare.right }}</strong></p>
+              <div class="tags">
+                {% for term in compare.common_keywords %}
+                  <span>{{ term }}</span>
+                {% else %}
+                  <span>Ortak kavram bulunamadı</span>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <nav class="mobile-nav" aria-label="Mobil menü">
+      <a class="active" href="{{ url_for('main.index') }}">Ana Sayfa</a>
+      <a href="#history">Belgeler</a>
+      <a href="#documents">+</a>
+      <a href="#study">Çalışma</a>
+      <a href="#memory">Hafıza</a>
+    </nav>
+  </body>
+</html>
